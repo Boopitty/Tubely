@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
@@ -71,14 +72,10 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Update the thumbnail for the video in the database. In this example, we are storing the thumbnail data directly in the database, but in a real application, you would likely want to store it in a file storage service like S3 and save the URL in the database instead.
-	videoThumbnails[video.ID] = thumbnail{
-		data:      imageData,
-		mediaType: mediaType,
-	}
-
-	thumbnailURL := fmt.Sprintf("http://localhost:%s/api/thumbnails/%s", cfg.port, videoID)
-	video.ThumbnailURL = &thumbnailURL
+	// image url: fmt.Sprintf("http://localhost:%s/api/thumbnails/%s", cfg.port, videoID)
+	thumbnailDataString := base64.StdEncoding.EncodeToString(imageData)
+	dataURL := fmt.Sprintf("data:%s;base64,%s", mediaType, thumbnailDataString)
+	video.ThumbnailURL = &dataURL
 
 	err = cfg.db.UpdateVideo(video)
 	if err != nil {
