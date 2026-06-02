@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"os"
 
@@ -52,9 +53,16 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	}
 	defer fileData.Close()
 
-	// The media type of the uploaded file from the header
+	// The media type of the uploaded file from the Content-Type header
 	mediaType := fileHeader.Header.Get("Content-Type")
-	if mediaType != "image/jpeg" && mediaType != "image/png" {
+
+	// Parse and validate the media type.
+	mimeType, _, err := mime.ParseMediaType(mediaType)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Couldn't parse media type", err)
+		return
+	}
+	if mimeType != "image/jpeg" && mimeType != "image/png" {
 		respondWithError(w, http.StatusBadRequest, "Unsupported media type. Only JPEG and PNG are allowed.", nil)
 		return
 	}
@@ -78,7 +86,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	}
 
 	// thumbnail path: /assets/<videoID>.<file_extension>
-	thumbnailPath := fmt.Sprintf("%s/%s.%s", cfg.assetsRoot, videoID, mediaType[len("image/"):])
+	thumbnailPath := fmt.Sprintf("%s/%s.%s", cfg.assetsRoot, videoID, mimeType[len("image/"):])
 
 	// Create a file in the assets directory
 	assetFile, err := os.Create(thumbnailPath)
