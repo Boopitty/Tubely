@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"mime"
@@ -85,8 +87,16 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Generate random file name for the thumbnail.
+	randomBytes := make([]byte, 32)
+	_, err = rand.Read(randomBytes)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't generate random bytes", err)
+		return
+	}
+	encoded := base64.URLEncoding.EncodeToString(randomBytes)
 	// thumbnail path: /assets/<videoID>.<file_extension>
-	thumbnailPath := fmt.Sprintf("%s/%s.%s", cfg.assetsRoot, videoID, mimeType[len("image/"):])
+	thumbnailPath := fmt.Sprintf("%s/%s.%s", cfg.assetsRoot, encoded, mimeType[len("image/"):])
 
 	// Create a file in the assets directory
 	assetFile, err := os.Create(thumbnailPath)
@@ -104,7 +114,7 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Update the video record in the database with the thumbnail URL
-	thumbnailURL := fmt.Sprintf("http://localhost:%s/assets/%s.%s", cfg.port, videoID, mediaType[len("image/"):])
+	thumbnailURL := fmt.Sprintf("http://localhost:%s/assets/%s.%s", cfg.port, encoded, mediaType[len("image/"):])
 	video.ThumbnailURL = &thumbnailURL
 	err = cfg.db.UpdateVideo(video)
 	if err != nil {
