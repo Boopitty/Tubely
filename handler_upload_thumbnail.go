@@ -1,10 +1,11 @@
 package main
 
 import (
-	"encoding/base64"
+	"bytes"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
 	"github.com/google/uuid"
@@ -53,6 +54,10 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 
 	// The media type of the uploaded file from the header
 	mediaType := fileHeader.Header.Get("Content-Type")
+	if mediaType != "image/jpeg" && mediaType != "image/png" {
+		respondWithError(w, http.StatusBadRequest, "Unsupported media type. Only JPEG and PNG are allowed.", nil)
+		return
+	}
 
 	// The actual image file data as a byte slice
 	imageData, err := io.ReadAll(fileData)
@@ -72,11 +77,27 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// image url: fmt.Sprintf("http://localhost:%s/api/thumbnails/%s", cfg.port, videoID)
-	thumbnailDataString := base64.StdEncoding.EncodeToString(imageData)
-	dataURL := fmt.Sprintf("data:%s;base64,%s", mediaType, thumbnailDataString)
-	video.ThumbnailURL = &dataURL
+	// thumbnail path: /assets/<videoID>.<file_extension>
+	thumbnailPath := fmt.Sprintf("%s/%s.%s", cfg.assetsRoot, videoID, mediaType[len("image/"):])
 
+	// Create a file in the assets directory
+	assetFile, err := os.Create(thumbnailPath)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't create thumbnail file", err)
+		return
+	}
+	defer assetFile.Close()
+
+	// Write the image data to the new file
+	_, err = io.Copy(assetFile, bytes.NewReader(imageData))
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't save thumbnail file", err)
+		return
+	}
+
+	// Update the video record in the database with the thumbnail URL
+	thumbnailURL := fmt.Sprintf("http://localhost:%s/assets/%s.%s", cfg.port, videoID, mediaType[len("image/"):])
+	video.ThumbnailURL = &thumbnailURL
 	err = cfg.db.UpdateVideo(video)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't update video thumbnail in database", err)
