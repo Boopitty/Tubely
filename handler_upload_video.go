@@ -89,6 +89,21 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	}
 	tempFile.Seek(0, io.SeekStart) // reset file pointer to the beginning for later reading
 
+	// Get the aspect ratio of the video file.
+	aspectRatio, err := getVideoAspectRatio(tempFile.Name())
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't get video aspect ratio", err)
+		return
+	}
+	switch aspectRatio {
+	case "16:9":
+		aspectRatio = "landscape"
+	case "9:16":
+		aspectRatio = "portrait"
+	default:
+		aspectRatio = "other"
+	}
+
 	// Generate a random file name for the video file in S3.
 	bytesKey := make([]byte, 32)
 	_, err = io.ReadFull(rand.Reader, bytesKey)
@@ -96,8 +111,8 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		respondWithError(w, http.StatusInternalServerError, "Couldn't generate random file name", err)
 		return
 	}
-	stringKey := base64.URLEncoding.EncodeToString(bytesKey)             // e.g. "randomstring"
-	fileKey := fmt.Sprintf("%s.%s", stringKey, mimeType[len("video/"):]) // e.g. "randomstring.mp4"
+	stringKey := base64.URLEncoding.EncodeToString(bytesKey)                             // e.g. "randomstring"
+	fileKey := fmt.Sprintf("%s/%s.%s", aspectRatio, stringKey, mimeType[len("video/"):]) // e.g. "randomstring.mp4"
 
 	// Upload the video file to S3.
 	_, err = cfg.s3Client.PutObject(r.Context(), &s3.PutObjectInput{
