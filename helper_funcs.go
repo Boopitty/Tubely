@@ -12,13 +12,15 @@ func getVideoAspectRatio(filePath string) (string, error) {
 	// Command to run ffprobe to get the stream info in JSON format
 	cmd := exec.Command("ffprobe", "-v", "error", "-print_format", "json", "-show_streams", filePath)
 
-	// Run the command and capture the output
+	// Run the command
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	err := cmd.Run()
 	if err != nil {
 		return "", err
 	}
+
+	// Capture output
 	cmdOutput := struct {
 		Streams []struct {
 			Width  int `json:"width"`
@@ -45,4 +47,18 @@ func getVideoAspectRatio(filePath string) (string, error) {
 
 	stringRatio := fmt.Sprintf("%d:%d", int(width), int(height))
 	return stringRatio, nil
+}
+
+// Takes a file path as input and creates and returns a new path to a file with "fast start" encoding.
+func processVideoForFastStart(filePath string) (string, error) {
+	outFilePath := fmt.Sprintf("%s.%s", filePath, "processing")
+	cmd := exec.Command("ffmpeg", "-i", filePath, "-c", "copy", "-movflags", "faststart", "-f", "mp4", outFilePath)
+
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("ffmpeg failed: %w: %s", err, stderr.String())
+	}
+	return outFilePath, nil
 }

@@ -15,6 +15,7 @@ import (
 )
 
 func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request) {
+	// Get the video ID from the URL path and validate it.
 	videoIDString := r.PathValue("videoID")
 	videoID, err := uuid.Parse(videoIDString)
 	if err != nil {
@@ -22,12 +23,14 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// Get the token from the authorization header and validate it.
 	token, err := auth.GetBearerToken(r.Header)
 	if err != nil {
 		respondWithError(w, http.StatusUnauthorized, "Couldn't find JWT", err)
 		return
 	}
 
+	// Validate the JWT and get the user ID from it.
 	userID, err := auth.ValidateJWT(token, cfg.jwtSecret)
 	if err != nil {
 		respondWithError(w, http.StatusUnauthorized, "Couldn't validate JWT", err)
@@ -89,8 +92,23 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	}
 	tempFile.Seek(0, io.SeekStart) // reset file pointer to the beginning for later reading
 
+	// Process the video file for fast start streaming.
+	// The proccessed video will be uploaded to s3 and the original video file will be deleted after processing.
+	outputFilePath, err := processVideoForFastStart(tempFile.Name())
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't process video for fast start", err)
+		return
+	}
+	defer os.Remove(outputFilePath)
+	outputFile, err := os.Open(outputFilePath) // open the new file for use
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Could not open output file", err)
+		return
+	}
+	defer outputFile.Close()
+
 	// Get the aspect ratio of the video file.
-	aspectRatio, err := getVideoAspectRatio(tempFile.Name())
+	aspectRatio, err := getVideoAspectRatio(outputFilePath)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't get video aspect ratio", err)
 		return
@@ -118,7 +136,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	_, err = cfg.s3Client.PutObject(r.Context(), &s3.PutObjectInput{
 		Bucket:      &cfg.s3Bucket,
 		Key:         &fileKey,
-		Body:        tempFile,
+		Body:        outputFile,
 		ContentType: &mimeType,
 	})
 	if err != nil {
