@@ -145,9 +145,14 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Update the video record in the database with the new video URL.
-	newVideoURL := fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s", cfg.s3Bucket, cfg.s3Region, fileKey)
-	dbVideo.VideoURL = &newVideoURL
-	err = cfg.db.UpdateVideo(dbVideo)
+	bucketKey := fmt.Sprintf("%s,%s", cfg.s3Bucket, fileKey)
+	dbVideo.VideoURL = &bucketKey
+	signedVideo, err := cfg.dbVideoToSignedVideo(dbVideo)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't sign video", err)
+		return
+	}
+	err = cfg.db.UpdateVideo(signedVideo)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't update video", err)
 		return
