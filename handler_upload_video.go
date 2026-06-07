@@ -130,7 +130,7 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	stringKey := base64.URLEncoding.EncodeToString(bytesKey)                             // e.g. "randomstring"
-	fileKey := fmt.Sprintf("%s/%s.%s", aspectRatio, stringKey, mimeType[len("video/"):]) // e.g. "randomstring.mp4"
+	fileKey := fmt.Sprintf("%s/%s.%s", aspectRatio, stringKey, mimeType[len("video/"):]) // e.g. "landscape/randomstring.mp4"
 
 	// Upload the video file to S3.
 	_, err = cfg.s3Client.PutObject(r.Context(), &s3.PutObjectInput{
@@ -145,14 +145,9 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Update the video record in the database with the new video URL.
-	bucketKey := fmt.Sprintf("%s,%s", cfg.s3Bucket, fileKey)
-	dbVideo.VideoURL = &bucketKey
-	signedVideo, err := cfg.dbVideoToSignedVideo(dbVideo)
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Couldn't sign video", err)
-		return
-	}
-	err = cfg.db.UpdateVideo(signedVideo)
+	videoURL := fmt.Sprintf("https://%s/%s", cfg.s3CfDistribution, fileKey)
+	dbVideo.VideoURL = &videoURL
+	err = cfg.db.UpdateVideo(dbVideo)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't update video", err)
 		return

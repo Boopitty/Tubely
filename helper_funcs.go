@@ -2,13 +2,9 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"os/exec"
-	"time"
-
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
 // Find the aspect ratio of a video file using ffprobe.
@@ -65,17 +61,4 @@ func processVideoForFastStart(filePath string) (string, error) {
 		return "", fmt.Errorf("ffmpeg failed: %w: %s", err, stderr.String())
 	}
 	return outFilePath, nil
-}
-
-func generatePresignedURL(s3Client *s3.Client, bucket, key string, expireTime time.Duration) (string, error) {
-	client := s3.NewPresignClient(s3Client)
-	input := s3.GetObjectInput{
-		Bucket: &bucket,
-		Key:    &key,
-	}
-	object, err := client.PresignGetObject(context.Background(), &input, s3.WithPresignExpires(expireTime))
-	if err != nil {
-		return "", err
-	}
-	return object.URL, nil
 }
