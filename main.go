@@ -130,6 +130,6 @@ func main() {
 		Handler: mux,
 	}
 
-	log.Printf("Serving on: http://localhost:%s/app/\n", port)
+	log.Printf("Serving on: http://localhost:%s/\n", port)
 	log.Fatal(srv.ListenAndServe())
 }
